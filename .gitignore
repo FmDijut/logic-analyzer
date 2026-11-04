@@ -1,0 +1,37 @@
+# bytecode / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# backup di lavorazione
+*.orig
+*.bak
+*.bak.*
+
+# ambienti virtuali
+.venv/
+venv/
+env/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# build Arduino
+build/
+*.hex
+*.elf
+
+# log
+*.log
+
+# segreti / configurazione locale
+.env
+.env.*

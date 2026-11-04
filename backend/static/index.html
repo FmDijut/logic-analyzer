@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Logic Analyzer — 6 canali</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg:#0a0a12;--bg2:#111122;--bg3:#151530;--line:#2a2a4a;--acc:#88ddff;--txt:#cfcfff}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:system-ui,'Segoe UI',sans-serif;overflow:hidden;user-select:none}
+  #app{display:flex;flex-direction:column;height:100vh}
+
+  /* tabs */
+  #tabs{display:flex;align-items:flex-end;background:var(--bg2);padding:4px 8px 0;gap:2px;border-bottom:1px solid var(--line)}
+  .tab{padding:5px 16px;font-size:11px;font-weight:600;border-radius:6px 6px 0 0;cursor:pointer;color:#667;background:transparent;border:none;font-family:inherit}
+  .tab.active{background:var(--bg);color:var(--acc);border:1px solid var(--line);border-bottom:none}
+  .tab.off{opacity:.35;cursor:default}
+  #tabs .spacer{flex:1}
+  #gear,#panbtn{background:none;border:none;color:#667;font-size:14px;cursor:pointer;padding:4px 8px}
+  #gear:hover,#panbtn:hover{color:var(--acc)}
+
+  /* toolbar */
+  #bar{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2)}
+  .btn{padding:3px 12px;border:none;border-radius:3px;cursor:pointer;font:inherit;font-size:11px;font-weight:600}
+  .b-avvia{background:#1d5a1d;color:#fff}.b-ferma{background:#5a1a1a;color:#fff}
+  .mode{padding:3px 10px;border:1px solid var(--line);background:transparent;color:#667;border-radius:3px;cursor:pointer;font:inherit;font-size:10px;font-weight:600}
+  .mode.sel{background:#204a60;color:#8ddcff;border-color:#2a5a7a}
+  #led{width:11px;height:11px;border-radius:50%;background:#444;margin:0 2px}
+  #stato{font-size:10px;color:#667}
+  #rate{font-size:11px;color:#aabbcc;margin-left:auto;margin-right:6px}
+  #per{font-size:11px;color:#aabbcc;margin-right:6px}
+  #lost{font-size:11px;color:#66cc88;margin-right:6px;border:1px solid #26343f;border-radius:8px;padding:1px 7px}
+  #lost.bad{color:#ff5555;font-weight:700;border-color:#7a2222;background:#2a1010}
+
+  /* main: scope + side panels */
+  #main{flex:1;display:flex;min-height:0}
+  #scope-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+  #scope{flex:1;position:relative;min-height:0}
+  #cv{position:absolute;inset:0;width:100%;height:100%}
+  #sliders{padding:4px 10px 6px;background:var(--bg2)}
+  .sl-row{display:flex;align-items:center;gap:8px;margin:2px 0}
+  .sl-row lab{font-size:9px;color:#667;width:44px;text-align:right}
+  .sl-row input[type=range]{flex:1;height:14px;accent-color:#4aa3c7;cursor:pointer}
+  .sl-row .lb{font-size:9px;color:#8aa;width:135px}
+
+  #divider{width:5px;background:var(--bg2);cursor:col-resize;flex-shrink:0}
+  #divider:hover{background:#2a4a6a}
+  #side{width:300px;min-width:160px;max-width:50%;display:flex;flex-direction:column;background:#0d0d1c;overflow:hidden}
+  #side.hidden{display:none}
+  .panel{border-bottom:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .panel h4{font-size:10px;color:var(--acc);padding:4px 8px;background:var(--bg2);font-weight:600}
+  .panel .pb{overflow-y:auto;font-size:10px;flex:1}
+  #spiTable{padding:4px 6px;font-family:Consolas,monospace;font-size:11px}
+  .scfg{display:flex;align-items:center;gap:3px;padding:2px 6px;flex-wrap:wrap}
+  .scfg lab{font-size:8px;color:#667;width:34px}
+  .sp{font-size:8px;padding:1px 5px;border-radius:8px;border:1px solid var(--line);cursor:pointer;color:#889;background:transparent}
+  .sp:hover{border-color:#4a6a8a}
+  .sp.sel{color:#0a0a12;font-weight:700}
+  .spi-row{display:flex;gap:8px;padding:1px 4px;border-radius:2px}
+  .spi-row .m{color:#eeeeee}.spi-row .s{color:#4488ff}
+  .spi-row.echo{background:#0a2a0a}
+  .spi-row.echo::after{content:"◀ ECHO";color:#22ff44;margin-left:auto}
+
+  /* strip canali */
+  #strip{display:flex;gap:4px;padding:5px 8px;background:var(--bg2);border-top:1px solid var(--line);overflow-x:auto}
+  .pill{display:flex;align-items:center;gap:5px;padding:3px 9px;background:var(--bg3);border:1px solid var(--line);border-radius:12px;cursor:pointer;flex-shrink:0;transition:opacity .15s}
+  .pill:hover{background:#1e1e3e}
+  .pill.off{opacity:.32}
+  .pill .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .pill .nm{font-size:11px;font-weight:600;cursor:text}
+  .nm-input{font:inherit;font-size:11px;font-weight:600;background:#0d0d1a;border:1px solid var(--acc);border-radius:2px;color:inherit;width:64px;padding:0 3px;text-align:center}
+
+  /* footer */
+  #footer{display:flex;align-items:center;gap:10px;padding:4px 10px;background:var(--bg2);border-top:1px solid var(--line);font-size:10px;color:#667;flex-wrap:wrap}
+  .stat span:last-child{color:#aab;margin-left:3px}
+
+  /* pagine tab */
+  .page{flex:1;display:flex;flex-direction:column;min-height:0}
+  #pconsole .err{color:#ff6666}
+  #pconsole .ok{color:#22dd66}
+  #pconsole .sys{color:#556}
+
+  .gwrap{padding:2px 4px}
+  .grow{display:flex;align-items:center;gap:3px;padding:3px 4px;border-bottom:1px solid #1a1a30}
+  .grow .gdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .grow .gnm{font-size:10px;font-weight:700;width:44px}
+  .grow .gpin{font-size:8px;color:#556;width:24px}
+  .grow input{width:48px;background:#0d0d1a;color:var(--txt);border:1px solid var(--line);padding:1px 3px;font:inherit;font-size:9px}
+  .gbtn{font-size:9px;padding:2px 6px;border:1px solid var(--line);background:#151530;color:#99a;border-radius:3px;cursor:pointer;font-weight:600}
+  .gbtn:hover{color:var(--acc);border-color:#2a5a7a}
+  .gbtn.on{background:#1d5a1d;color:#fff;border-color:#2a7a2a}
+  .grow input.w2{width:34px}
+
+  .g2{display:flex;align-items:center;gap:4px;padding:0 4px 4px 48px}
+  .g2 input.w3{width:32px}
+  .g2 input[type=range]{width:56px;accent-color:#4aa3c7;height:10px}
+  .knob{width:36px;height:36px;flex-shrink:0;cursor:ns-resize;touch-action:none;margin-left:auto}
+  .kcap{width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#2e2e52,#101024);border:2px solid var(--line);position:relative;transition:border-color .15s}
+  .kcap.on{border-color:#2a9a4a;box-shadow:0 0 7px rgba(34,221,102,.35)}
+  .kline{position:absolute;left:15px;top:3px;width:4px;height:11px;background:var(--acc);border-radius:2px}
+  .klbl{font-size:8px;color:#8aa;text-align:center;font-family:Consolas,monospace;min-width:36px}
+
+  /* config popup */
+  #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+  #config-panel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:12px 16px;z-index:100;width:280px;box-shadow:0 4px 20px #000}
+  #config-panel h3{font-size:12px;color:var(--acc);margin-bottom:6px}
+  .g{margin:4px 0;display:flex;align-items:center;gap:4px}
+  .g lab{width:80px;font-size:10px;color:#bbb}
+  .g input,.g select{background:#0d0d1a;color:var(--txt);border:1px solid var(--line);padding:2px 4px;font:inherit;font-size:10px;width:120px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tabs">
+    <button class="tab active" id="tab-scope">⚡ LOGIC ANALYZER</button>
+    <span class="spacer"></span>
+    <button id="panbtn" onclick="toggleSide()" title="pannelli">▤</button>
+    <button id="gear" onclick="toggleConfig()">⚙</button>
+  </div>
+
+  <div id="page-scope" class="page">
+  <div id="bar">
+    <button class="btn b-avvia" onclick="avvia()">▶ AVVIA</button>
+    <button class="btn b-ferma" onclick="ferma()">■ FERMA</button>
+    <button class="mode" onclick="pulisci()" title="scarta la storia: lo scope riparte dal presente">🧹 PULISCI</button>
+    <span style="width:8px"></span>
+    <select id="trigCh" style="background:#0d0d1a;color:var(--txt);border:1px solid var(--line);padding:2px 3px;font:inherit;font-size:10px"></select>
+    <select id="trigEdge" style="background:#0d0d1a;color:var(--txt);border:1px solid var(--line);padding:2px 3px;font:inherit;font-size:10px"><option value="1">↑ salita</option><option value="0">↓ discesa</option></select>
+    <button class="mode" id="bTrig" onclick="trigToggle()" title="arma il trigger: la vista congela sul fronte scelto">⊕ TRIGGER</button>
+    <span style="width:8px"></span>
+    <button class="mode sel" id="m-raw" onclick="setMode('raw')">RAW</button>
+    <button class="mode" id="m-spi" onclick="setMode('spi')">SPI</button>
+    <button class="mode" id="m-evt" onclick="setEvtMode()" title="stream a TRANSIZIONI: solo i cambi di stato, timestamp hardware a 0.5 µs. Idle = zero byte.">EVT</button>
+    <button class="mode sel" id="v-block" onclick="setView('block')" title="vista a blocchi">▮</button>
+    <button class="mode" id="v-line" onclick="setView('line')" title="vista a linea">∿</button>
+    <span id="led"></span><span id="stato">offline</span>
+    <span id="idle" style="font-size:9px;padding:2px 8px;border-radius:8px;border:1px solid var(--line);color:#667">—</span>
+    <span id="per" title="periodo di campionamento REALE, quello che il Timer1 dello sketch ha impostato">—</span>
+    <span id="lost" title="campioni persi dichiarati dallo sketch (ring pieno): se &gt; 0 la base dei tempi NON è integra">—</span>
+    <span id="rate">—</span>
+  </div>
+
+  <div id="main">
+    <div id="scope-panel">
+      <div id="scope"><canvas id="cv"></canvas></div>
+      <div id="sliders">
+        <div class="sl-row"><lab title="quanto TEMPO sta sullo schermo (non e' una frequenza)">zoom</lab><input type="range" id="zoomSl" min="0" max="100" value="55"><span class="lb" id="zoomLbl" title="finestra temporale in vista">—</span></div>
+        <div class="sl-row"><lab>tempo</lab><input type="range" id="timeSl" min="0" max="1000" value="1000"><span class="lb" id="timeLbl">LIVE</span></div>
+      </div>
+    </div>
+    <div id="divider" onmousedown="divStart(event)"></div>
+    <div id="side">
+      <div class="panel" id="panEvt" style="flex:1.6;display:none">
+        <h4>TRANSIZIONI EVT <span id="evtInfo" style="color:#667;font-weight:400"></span></h4>
+        <div class="pb" id="evtBox" style="padding:5px 7px;display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;flex-wrap:wrap">
+            <lab style="font-size:10px;color:#889">finestra</lab>
+            <select id="evtWin" onchange="evtDraw()" style="background:#0d0d1a;color:var(--txt);border:1px solid var(--line);padding:2px 3px;font:inherit;font-size:10px">
+              <option value="20">20 µs</option>
+              <option value="100">100 µs</option>
+              <option value="500">500 µs</option>
+              <option value="2000" selected>2 ms</option>
+              <option value="10000">10 ms</option>
+              <option value="100000">100 ms</option>
+            </select>
+            <button class="gbtn" onclick="evtStatsNow()">MISURA</button>
+            <button class="gbtn" onclick="evtClear()">azzera</button>
+            <button class="gbtn" id="evtBigBtn" onclick="evtToggleBig()" title="ingrandisce la vista EVT">⛶</button>
+          </div>
+          <canvas id="evtCv" style="width:100%;flex:0 0 118px;height:118px;display:block;background:#06060d;border:1px solid var(--line);border-radius:4px"></canvas>
+          <div id="evtStats" style="font-size:9.5px;line-height:1.35;color:#9ab;white-space:pre-wrap;font-family:Consolas,monospace;margin-top:6px;user-select:text;overflow:auto">premi MISURA per le statistiche ad alta risoluzione</div>
+        </div>
+      </div>
+      <div class="panel" id="panDecoder" style="flex:1.4">
+        <h4>DECODER SPI <span id="spiCount" style="color:#667;font-weight:400"></span></h4>
+        <div id="spiCfg"></div>
+        <div class="pb"><div id="spiTable">—</div></div>
+      </div>
+      <div class="panel" id="panStats" style="flex:1">
+        <h4>STATISTICHE</h4>
+        <div class="pb" style="padding:6px 8px;color:#889" id="sideStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="strip"></div>
+
+  <div id="footer">
+    <div class="stat">buffer<span id="sbuf">0</span></div>
+    <div class="stat">campioni<span id="sc">0</span></div>
+    <div class="stat">e/s<span id="se">0</span></div>
+    <div class="stat" style="margin-left:auto;color:#556">zoom su buffer raw · decodifica locale</div>
+  </div>
+  </div><!-- /page-scope -->
+
+  <div id="overlay" onclick="toggleConfig()"></div>
+  <div id="config-panel">
+    <h3>⚙ Configurazione</h3>
+    <div class="g"><lab>Baud rate</lab><input id="ib" value="2000000"></div>
+    <div class="g"><lab>Timer (µs)</lab><input id="it" value="0"></div>
+    <div class="g"><lab>Risoluzione</lab><select id="ir"><option value="1">R1 digitale</option><option value="8">R8 media</option></select></div>
+    <div class="g" style="justify-content:flex-end;margin-top:8px"><button class="btn b-avvia" style="width:100%" onclick="applyConfig()">APPLICA</button></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════ CONFIG ═══════════════
+const C=6, CAP=2000000;
+// bit: 0=D8,1=D9,2=D10,3=D11,4=D12,5=D13
+const CH_BIT=[5,4,3,2,1,0];               // CH0=RST(D13) .. CH5=RXD(D8)
+// PINOUT REALE DELLA SCHEDA (fili per colore, verificato dall'utente 01/11/2026):
+// Etichette di default: solo il nome del pin. Rinominabili dall'interfaccia
+// (click sull'etichetta) per adattarle a ciò che stai misurando; i nomi
+// restano salvati nel browser.
+const DEF_NAMES=["CH0 (D13)","CH1 (D12)","CH2 (D11)","CH3 (D10)","CH4 (D9)","CH5 (D8)"];
+const DEF_COLORS=["#ffd700","#44cc44","#4488ff","#eeeeee","#ff4444","#66cc66"];
+let chNames=JSON.parse(localStorage.getItem('laChannelNames'))||[...DEF_NAMES];
+let chColors=[...DEF_COLORS];
+let chOn=[1,1,1,1,1,1];
+let connected=false, mode='raw', rate=0, curPeriod=0, curLost=0;
+let viewMode=localStorage.getItem('ekView')||'block';   // 'block' | 'line'
+
+// ═══════════════ BUFFER RAW (locale) ═══════════════
+// buf contiene i campioni assoluti [base, head) — compattato senza wrap
+let buf=new Uint8Array(CAP), base=0, head=0;
+const HEXCH=new Uint8Array(128);
+for(let i=0;i<16;i++){const c=i<10?48+i:87+i;HEXCH[c]=i;HEXCH[c-32]=i;} // 0-9,a-f,A-F
+
+function hexToBytes(h){
+  const n=h.length>>1, out=new Uint8Array(n);
+  for(let i=0;i<n;i++) out[i]=(HEXCH[h.charCodeAt(2*i)]<<4)|HEXCH[h.charCodeAt(2*i+1)];
+  return out;
+}
+function appendRaw(iStart,u8){
+  // server riavviato (indice ripartito indietro): reset pulito
+  if(iStart<base||(head===0&&base===0&&iStart>0)){base=iStart;head=iStart}
+  // prima connessione a metà stream: partenza pulita (niente finto passato)
+  else if(head===0&&base===0){base=iStart;head=iStart}
+  else if(iStart>head){          // gap → avanza riempiendo con l'ultimo livello
+    // i gap (chunk SSE persi) NON si disegnano come impulsi: si continua
+    // l'ultimo byte noto. Un gap è dati persi, non un segnale basso.
+    const lastByte=head>base?buf[head-base-1]:0x3F;
+    buf.fill(lastByte,head-base,iStart-base);
+    head=iStart;
+  }
+  let pos=head-base;
+  while(pos+u8.length>CAP){                  // buffer pieno: butta la metà vecchia
+    const drop=CAP>>1;
+    buf.copyWithin(0,drop,CAP); base+=drop;
+    pos=head-base;
+  }
+  buf.set(u8,pos); head+=u8.length;
+}
+
+// ═══════════════ TRIGGER ═══════════════
+// armed: in attesa del fronte sul canale scelto — fired: catturato, vista congelata centrata
+let trig={armed:false,fired:false,ch:0,edge:1,idx:-1,prevByte:-1};
+function trigScan(iStart,u8){
+  if(!trig.armed||trig.fired)return;
+  const bit=CH_BIT[trig.ch];
+  let prev=trig.prevByte;
+  for(let k=0;k<u8.length;k++){
+    const b=u8[k], v=(b>>bit)&1;
+    if(prev>=0){
+      const pv=(prev>>bit)&1;
+      if(v!==pv&&v===trig.edge){trigHit(iStart+k);return}
+    }
+    prev=b;
+  }
+  trig.prevByte=prev;
+}
+function trigHit(absIdx){
+  trig.fired=true;trig.idx=absIdx;trig.armed=false;trig.prevByte=-1;
+  live=false;timePos=absIdx+Math.round(zoomSamples/2);   // vista centrata sul fronte
+  trigUI();updLabels();dirty=true;
+}
+function trigToggle(){
+  if(trig.armed){trigReset(true)}                  // disarmo manuale
+  else{trig.fired=false;trig.idx=-1;trig.armed=true;trig.prevByte=head>base?buf[head-base-1]:-1;
+       live=true;trigUI();}
+  dirty=true;
+}
+function trigReset(keepView){
+  trig.armed=false;trig.fired=false;trig.idx=-1;trig.prevByte=-1;
+  if(!keepView)live=true;
+  trigUI();
+}
+function trigUI(){
+  const b=document.getElementById('bTrig');
+  if(trig.armed){b.textContent='◉ ARMATO';b.style.color='#ffd700';}
+  else if(trig.fired){b.textContent='✓ TRIG! RI-ARMA';b.style.color='#ff4444';}
+  else{b.textContent='⊕ TRIGGER';b.style.color='';}
+}
+function trigInit(){
+  const sel=document.getElementById('trigCh');
+  sel.innerHTML=chNames.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+  sel.onchange=()=>{trig.ch=+sel.value;trigReset(true)};
+  document.getElementById('trigEdge').onchange=e=>{trig.edge=+e.target.value;trigReset(true)};
+  trigUI();
+}
+
+// ═══════════════ VISTA (pos + zoom) ═══════════════
+let zoomSamples=30000, live=true, timePos=0;
+const ZMIN=600, ZMAX=1000000;
+function zoomFromSlider(v){return Math.round(ZMIN*Math.pow(ZMAX/ZMIN,v/100))}
+function samplesLabel(n){
+  // Il TEMPO viene per primo e con l'unità esplicita: prima era
+  // "125.280 camp. ≈ 2.47 s" e il numero dei campioni veniva letto come una
+  // frequenza. Questo readout dice QUANTO TEMPO sta sullo schermo, non a che
+  // frequenza va il segnale.
+  const s=n/Math.max(rate*1000,1);
+  if(!(rate>0)) return n.toLocaleString()+' camp.';
+  const t = s>=1 ? s.toFixed(2)+' s' : (s*1000).toFixed(1)+' ms';
+  return t+'  ('+n.toLocaleString()+' camp.)';
+}
+
+// ═══════════════ CANVAS ═══════════════
+let cv,ctx,W=0,H=0,dpr=1,dirty=true;
+window.onload=()=>{
+  cv=document.getElementById('cv'); ctx=cv.getContext('2d');
+  new ResizeObserver(()=>{fit();dirty=true}).observe(document.getElementById('scope'));
+  // il canvas EVT cambia dimensione quando il pannello si sposta tra area
+  // principale e barra laterale: senza questo resterebbe disegnato alla
+  // vecchia scala (immagine stirata o tagliata).
+  new ResizeObserver(()=>{ if(evtMode) evtDraw(); }).observe(document.getElementById('panEvt'));
+  fit(); initStrip(); renderSpiCfg(); bindSliders(); trigInit();
+  fetch('/api/status').then(r=>r.json()).then(s=>{connected=s.connected;dirty=true;updLed()});
+  const es=new EventSource('/stream');
+  es.onopen=()=>{ // EventSource si riconnette da solo: leva il finto OFFLINE
+    connected=true; updLed();
+    const st=document.getElementById('stato'); st.textContent='connesso'; st.style.color='';
+  };
+  es.onmessage=e=>{
+    let d; try{d=JSON.parse(e.data)}catch(_){return}
+    if(d.type==='init'){
+      // Sincronizza la modalità col server: se è già in EVT (es. dopo un
+      // reload della pagina) il frontend deve saperlo, altrimenti ignora gli
+      // eventi e resta a "in attesa di dati…". L'init porta già il modo:
+      // il fetch di /api/status è solo una rete di sicurezza per i server vecchi.
+      const syncEvt=m=>{
+        if(m!=='evt' || evtMode) return;
+        evtMode=true;
+        document.getElementById('m-evt').classList.add('sel');
+        document.getElementById('panEvt').style.display='';
+        document.getElementById('panDecoder').style.display='none';
+        evtEpoch=-1;
+        evtApplyLayout();
+        // Il backlog lo consegna la SSE stessa (cursore iniziale a -60000
+        // eventi): niente fetch di backfill, che creava una corsa col flusso.
+        if(!evtStatTimer) evtStatTimer=setInterval(evtStatsNow,3000);
+        setTimeout(evtStatsNow,1200);
+      };
+      if(d.mode!==undefined) syncEvt(d.mode);
+      else fetch('/api/status').then(r=>r.json()).then(s=>syncEvt(s&&s.mode)).catch(_=>{});
+      // Anche i campioni RAW arrivano dal backlog della SSE (ultimi 150k).
+    }
+    else if(d.type==='raw'){const u8=hexToBytes(d.d);appendRaw(d.i,u8);trigScan(d.i,u8);dirty=true}
+    else if(d.type==='evt'){if(evtMode)evtApply(d,false)}
+    else if(d.type==='reset'){base=0;head=0;live=true;trigReset(false);dirty=true;setLost(0)}
+    else if(d.type==='stats'){rate=d.rate;
+      document.getElementById('rate').textContent=d.rate+' kS/s';
+      document.getElementById('sc').textContent=(d.total||0).toLocaleString();
+      if(d.period){curPeriod=d.period;
+        document.getElementById('per').textContent=d.period.toFixed(0)+' µs · '+(1000/d.period).toFixed(1)+' kHz';}
+      setLost(d.lost||0);
+    }
+    else if(d.type==='status'){connected=d.connected;dirty=true;updLed()}
+    else if(d.type==='error'){console.error(d.msg)}
+  };
+  es.onerror=()=>{ // SSE morta (server riavviato/rete): non mentire col LED verde
+    connected=false; updLed();
+    document.getElementById('stato').textContent='OFFLINE — ricarica (F5)';
+    document.getElementById('stato').style.color='#ff4444';
+  };
+  requestAnimationFrame(loop);
+};
+function fit(){
+  const p=document.getElementById('scope');
+  dpr=window.devicePixelRatio||1;
+  W=p.clientWidth; H=p.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr;
+}
+function updLed(){
+  document.getElementById('led').style.background=connected?'#22cc44':'#444';
+  document.getElementById('stato').textContent=connected?'connesso':'offline';
+}
+
+// Indicatore di integrità della base dei tempi: lo sketch dichiara in-stream
+// quanti campioni ha perso per ring pieno (marcatori 0xFF <hi> <lo>).
+// Se > 0 la linea temporale ha dei buchi: i calcoli di frequenza a valle
+// (inclusi i decoder SPI/MIDI) NON sono più affidabili oltre quel punto.
+function setLost(L){
+  curLost = L;
+  const el = document.getElementById('lost');
+  if(!el) return;
+  el.textContent = L ? ('PERSA ' + L.toLocaleString() + ' camp.') : 'base dei tempi integra';
+  el.className = L ? 'bad' : '';
+  el.title = L
+    ? ('Persi ' + L.toLocaleString() + ' campioni per overrun del ring: la base dei tempi ha dei buchi')
+    : 'Nessun campione perso: la base dei tempi è integra';
+}
+
+// ═══════════════ MODALITÀ EVT: VISTA A TRANSIZIONI ═══════════════
+// Lo sketch trasmette solo i CAMBI di stato con timestamp hardware a 0.5 µs.
+// Qui non c'è un ring di campioni ma una lista di eventi (tick, stato): si
+// disegnano le transizioni con la loro durata REALE. È l'unico modo di vedere
+// segnali più veloci del periodo di campionamento (il clock SPI a 125 kHz ha
+// semiperiodo 4 µs, contro i 20 µs del campionamento fisso → aliasava).
+let evtMode=false, evtT=[], evtS=[], evtLostN=0, evtGlitchN=0, evtIsrUs=0, evtTotalN=0, evtTickUs=0.5, evtStatTimer=null;
+let evtEpoch=-1;   // firma del "run" EVT: se cambia, la timeline è ripartita
+let evtBig=true;   // vista EVT grande (occupa l'area principale invece della barra laterale)
+let evtDirty=false;// il disegno EVT è THROTTLATO al frame (vedi loop()):
+                   // disegnare a ogni messaggio SSE (50/s) con 120.000 eventi
+                   // x 6 canali bloccava il browser per decine di secondi
+// SORVEGLIANZA DEL SEGNALE. Senza questa, un segnale che CESSA e'
+// indistinguibile da un'app bloccata: lo schermo resta fermo e non c'e' modo
+// di sapere perche' (successo davvero: test RST alto, 12,5 s di silenzio
+// totale scambiati per un blocco).
+let evtLastRx=Date.now(); // ultimo istante in cui e' arrivato un EVENTO reale
+let evtStalled=false;     // true = l'analizzatore non riceve piu' transizioni
+
+async function setEvtMode(){
+  if(evtMode){
+    evtMode=false;
+    evtApplyLayout();
+    document.getElementById('m-evt').classList.remove('sel');
+    document.getElementById('panEvt').style.display='none';
+    document.getElementById('panDecoder').style.display='';
+    if(evtStatTimer){clearInterval(evtStatTimer);evtStatTimer=null;}
+    try{ await fetch('/api/evt/stop'); }catch(_){}
+  }else{
+    evtMode=true;
+    evtApplyLayout();
+    document.getElementById('m-evt').classList.add('sel');
+    document.getElementById('panEvt').style.display='';
+    document.getElementById('panDecoder').style.display='none';
+    evtT=[]; evtS=[]; evtLostN=0; evtGlitchN=0; evtTotalN=0; evtEpoch=-1;
+    evtLastRx=Date.now(); evtStalled=false;  // niente falso "segnale assente"
+    try{
+      await fetch('/api/evt/start');
+      const b=await (await fetch('/api/evt/backfill/60000')).json();
+      evtApply(b,true);
+    }catch(_){}
+    evtStatTimer=setInterval(evtStatsNow,3000);
+    setTimeout(evtStatsNow,1200);
+  }
+}
+
+// ── LAYOUT DEL PANNELLO EVT ──────────────────────────────────
+// La vista a transizioni serve proprio a guardare segnali veloci: in 300 px di
+// barra laterale non si vede nulla. In modalità grande il pannello viene
+// SPOSTATO (reparent) nell'area principale al posto dello scope, che in EVT
+// non riceve dati comunque. Con ⇥ torna nella barra laterale.
+function evtApplyLayout(){
+  const pan=document.getElementById('panEvt');
+  const box=document.getElementById('evtBox');
+  const cv=document.getElementById('evtCv');
+  const st=document.getElementById('evtStats');
+  const btn=document.getElementById('evtBigBtn');
+  const main=document.getElementById('main');
+  const side=document.getElementById('side');
+  const sc=document.getElementById('scope-panel');
+  const dv=document.getElementById('divider');
+  if(!pan||!cv||!main||!side) return;
+  if(evtMode && evtBig){
+    if(pan.parentElement!==main) main.insertBefore(pan, sc);
+    pan.style.flex='1'; pan.style.minWidth='0';
+    sc.style.display='none'; dv.style.display='none'; side.style.display='none';
+    box.style.overflow='hidden';
+    cv.style.flex='1 1 0'; cv.style.height='auto'; cv.style.minHeight='140px';
+    st.style.maxHeight='38%';
+    if(btn){btn.textContent='⇥'; btn.title='riporta il pannello nella barra laterale';}
+  }else{
+    if(pan.parentElement!==side) side.insertBefore(pan, side.firstChild);
+    pan.style.flex='1.6'; pan.style.minWidth='';
+    sc.style.display=''; dv.style.display=''; side.style.display='';
+    box.style.overflow='auto';
+    cv.style.flex='0 0 118px'; cv.style.height='118px'; cv.style.minHeight='';
+    st.style.maxHeight='';
+    if(btn){btn.textContent='⛶'; btn.title='ingrandisce la vista EVT';}
+  }
+  requestAnimationFrame(evtDraw);
+}
+function evtToggleBig(){ evtBig=!evtBig; evtApplyLayout(); }
+
+function evtApply(b, reset){
+  if(!b||!b.dl) return;
+  // ── RILEVAZIONE DI DISCONTINUITÀ DELLA TIMELINE ──
+  // Se il worker EVT si riavvia (o lo sketch è resettato), il server azzera i
+  // tick e incrementa l'epoch. Appendere eventi di run diversi produce un array
+  // NON monotono e durate senza senso (bug osservato: 98.670 ev "in 949 ms").
+  if(b.epoch!==undefined && b.epoch!==evtEpoch){ evtEpoch=b.epoch; reset=true; }
+  // Rete di sicurezza indipendente dall'epoch: se il primo tick in arrivo è
+  // PIÙ PICCOLO dell'ultimo che abbiamo, la timeline è tornata indietro.
+  if(!reset && b.t0!==undefined && evtT.length && b.t0 < evtT[evtT.length-1]) reset=true;
+  evtTickUs=b.tick_us||0.5;
+  if(reset){ evtT=[]; evtS=[]; }
+  let t=b.t0||0;
+  const sh=b.sh||'';
+  for(let k=0;k<b.dl.length;k++){
+    if(k>0) t+=b.dl[k];
+    evtT.push(t); evtS.push(parseInt(sh.substr(k*2,2)||'0',16));
+  }
+  if(b.lost!==undefined) evtLostN=b.lost;
+  if(b.glitch!==undefined) evtGlitchN=b.glitch;
+  if(b.isr_us!==undefined) evtIsrUs=b.isr_us;
+  evtTotalN=(b.total!==undefined)?b.total:((b.i||0)+b.dl.length);
+  if(b.dl.length) evtLastRx=Date.now();   // e' arrivato un evento REALE
+  const CAPE=120000;
+  if(evtT.length>CAPE){ evtT.splice(0,evtT.length-CAPE); evtS.splice(0,evtS.length-CAPE); }
+  evtDirty=true;                     // il disegno lo fa il loop() a ogni frame
+}
+
+function evtClear(){ evtT=[]; evtS=[]; evtDirty=true; }
+
+function evtDraw(){
+  const cv=document.getElementById('evtCv'); if(!cv) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=Math.max(cv.clientWidth,50), H=Math.max(cv.clientHeight,50);
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  const ML=46;                      // margine sinistro: le etichette NON devono
+                                    // stare sopra la forma d'onda
+  const RH=13;                      // striscia in basso per la riga del tempo
+  const n=evtT.length;
+  if(n<2){ g.fillStyle='#556'; g.font='11px Consolas'; g.fillText('in attesa di transizioni…',ML,16); return; }
+  const winUs=+(document.getElementById('evtWin').value||2000);
+  const tEndUs=evtT[n-1]*evtTickUs, tStartUs=tEndUs-winUs;
+  const wy=H-RH;                    // altezza utile per le forme d'onda
+  // ── RIGA DEL TEMPO ───────────────────────────────────────────
+  // Senza riferimenti una forma d'onda grande non dice QUANTO dura un impulso.
+  const fmtT=u=> u>=1000 ? (u/1000).toFixed(u>=10000?1:2)+' ms'
+                         : u.toFixed(u<10?1:0)+' µs';
+  for(let k=0;k<=5;k++){
+    const x=ML+(W-ML)*k/5;
+    g.strokeStyle = k===0 ? '#1d2a3a' : '#121a26'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(x,1); g.lineTo(x,wy); g.stroke();
+    g.fillStyle='#5a6a80'; g.font='8px Consolas';
+    g.textAlign = k===0?'left':(k===5?'right':'center');
+    g.fillText(fmtT(winUs*k/5), x, H-3);
+  }
+  g.textAlign='left';
+  // RICERCA BINARIA del primo evento visibile: gli eventi sono ordinati per
+  // tick, quindi disegnare TUTTI i 120.000 eventi per ogni frame era inutile
+  // (720.000 segmenti) e congelava la pagina. Ora si disegna solo la finestra.
+  let k0=0;
+  if(n && evtT[0]*evtTickUs < tStartUs){
+    let lo=0, hi=n-1;
+    while(lo<hi){ const mid=(lo+hi)>>1;
+      if(evtT[mid]*evtTickUs < tStartUs) lo=mid+1; else hi=mid; }
+    k0=lo>0?lo-1:0;      // uno prima, per conoscere lo stato all'ingresso
+  }
+  const rows=6, rh=(wy-2)/rows;
+  for(let ch=0; ch<6; ch++){
+    const bit=CH_BIT[ch];
+    const yTop=1+ch*rh;
+    const yHi=yTop+rh*0.24, yLo=yTop+rh*0.76;
+    g.font='9px Consolas';
+    g.fillStyle=chOn[ch]?chColors[ch]:'#3a3f4a';
+    g.fillText(chNames[ch].replace(/\(.*/,''), 3, yHi+3);
+    g.strokeStyle='#141a24'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(0,yTop+rh-0.5); g.lineTo(W,yTop+rh-0.5); g.stroke();
+    if(!chOn[ch]) continue;
+    g.strokeStyle=chColors[ch]; g.lineWidth=1.4;
+    g.beginPath();
+    let prevY=null, started=false, st=null;
+    for(let k=k0;k<n;k++){          // solo gli eventi visibili nella finestra
+      const tUs=evtT[k]*evtTickUs;
+      const v=(evtS[k]>>bit)&1;
+      if(tUs<tStartUs){ st=v; continue; }
+      const x=ML+(tUs-tStartUs)/winUs*(W-ML);
+      const y=v?yHi:yLo;
+      if(!started){
+        const y0=((st===null?v:st)?yHi:yLo);
+        g.moveTo(ML,y0); prevY=y0; started=true;
+      }
+      g.lineTo(x,prevY); g.lineTo(x,y); prevY=y;
+    }
+    if(started) g.lineTo(W,prevY);
+    g.stroke();
+  }
+  // -- SEGNALE ASSENTE -------------------------------------------------
+  // Il grafico si ancora all'ultimo evento: se il segnale cessa, si ferma e
+  // sembra che il programma sia morto. Lo diciamo apertamente.
+  if(evtStalled){
+    const secs=((Date.now()-evtLastRx)/1000).toFixed(1);
+    g.fillStyle='rgba(10,7,9,0.78)'; g.fillRect(ML,0,W-ML,wy);
+    g.textAlign='center';
+    g.fillStyle='#ff5544'; g.font='bold 16px Consolas';
+    g.fillText('SEGNALE ASSENTE da '+secs+' s', ML+(W-ML)/2, wy/2-8);
+    g.fillStyle='#a07068'; g.font='11px Consolas';
+    g.fillText('nessuna transizione in arrivo: chip in reset, fermo, o segnale cessato',
+               ML+(W-ML)/2, wy/2+12);
+    g.textAlign='left';
+  }
+  const spanUs=(evtT[n-1]-evtT[0])*evtTickUs;
+  const evs=spanUs>0?Math.round((n-1)/(spanUs/1e6)):0;
+  // spanUs è in µs: /1e6 = SECONDI, /1e3 = millisecondi. Prima era /1e3 con
+  // l'etichetta "s" → l'header dichiarava 3760 s per un buffer di 3.76 s.
+  document.getElementById('evtInfo').innerHTML =
+    (evtStalled? '<b style="color:#ff5544">SEGNALE ASSENTE da '+((Date.now()-evtLastRx)/1000).toFixed(1)+' s</b> / ' : '') +
+    n.toLocaleString()+' ev · '+(spanUs/1e6).toFixed(2)+' s · '+evs.toLocaleString()+' ev/s'
+    + (evtLostN? ' · PERSI '+evtLostN.toLocaleString() : '')
+    + (evtGlitchN? ' · glitch '+evtGlitchN.toLocaleString() : '')
+    // Il limite REALE è ISR + prologo/epilogo/ingresso (~5 µs, tarato
+    // sperimentalmente allungando la ISR: vedi EVT_ISR_PAD nello sketch). Il
+    // campo live misura solo il CORPO della ISR: dichiararlo come limite
+    // sarebbe ottimistico di 5 µs.
+    + (evtIsrUs? ' · ISR '+evtIsrUs+' µs (limite ~'+(evtIsrUs+5)+' µs)' : '');
+  // Il footer in modalità EVT mostra i numeri degli EVENTI: quelli del ring
+  // RAW resterebbero a zero e sembrerebbe che non arrivi nulla.
+  if(evtMode){
+    document.getElementById('sbuf').textContent=(n/1000).toFixed(0)+'k';
+    document.getElementById('sc').textContent=evtTotalN.toLocaleString();
+    document.getElementById('se').textContent=evs.toLocaleString();
+  }
+}
+
+// WATCHDOG DEL SEGNALE + FALLBACK ANTI-CONGELAMENTO
+// rAF viene THROTTATO A ZERO quando la scheda non e' in primo piano: loop()
+// smette di girare e il grafico si CONGELA pur essendo lo stream vivo.
+// Diagnosticato davvero: header EVT VUOTO con evtDirty=true e 120.000 eventi
+// in memoria -> l'app sembrava morta mentre il segnale c'era.
+// setInterval NON viene throttlato allo stesso modo, quindi ridisegna lui.
+setInterval(()=>{
+  if(!evtMode){
+    if(dirty){ draw(); dirty=false; }        // fallback scope RAW
+    return;
+  }
+  const st=(Date.now()-evtLastRx)>2000;
+  // Il contatore dei secondi DEVE avanzare: se ridisegnassimo solo al cambio di
+  // stato, il banner direbbe per sempre "da 2.1 s" (bug visto davvero: 9,1 s
+  // reali contro 2,1 s dichiarati).
+  if(st!==evtStalled || st || evtDirty){ evtStalled=st; evtDraw(); evtDirty=false; }
+},400);
+
+async function evtStatsNow(){
+  const el=document.getElementById('evtStats'); if(!el) return;
+  try{
+    const d=await (await fetch('/api/evt/stats')).json();
+    if(!d.canali||!d.canali.length){ el.textContent='nessun evento da misurare'; return; }
+    // Numeri COMPATTI: le durate possono arrivare a milioni di µs e facevano
+    // traboccare le colonne, rendendo la tabella illeggibile.
+    const num=v=> v==null ? '?' : (Math.abs(v)>=1000 ? String(Math.round(v)) : v.toFixed(1));
+    const tri=x=> x? (num(x.min)+'·'+num(x.med)+'·'+num(x.max)) : '—';
+    let s='eventi '+d.events.toLocaleString()+'/'+d.total.toLocaleString()
+        +'  persi '+d.lost.toLocaleString()+'  glitch '+d.glitch.toLocaleString()
+        +'  finestra '+(d.span_us/1000).toFixed(1)+' ms\n';
+    if(d.isr_us) s+='ISR '+d.isr_us+' µs (corpo) → limite pratico ~'+(d.isr_us+5)+' µs\n';
+    // L'impulso più corto visto davvero: è il numero che dice se si sta
+    // guardando il segnale o il fondo scala dell'istrumento. Se coincide col
+    // limite pratico, sotto quel valore NON si sa cosa c'è.
+    var mins=[];
+    for(const c of d.canali){ if(c.alto&&c.alto.min) mins.push(c.alto.min); }
+    if(mins.length) s+='impulso piu\' corto osservato: '+Math.min.apply(null,mins).toFixed(2)+' µs\n';
+    s+='\n';
+    s+='canale       frnti     Hz   alto µs min·med·max     basso µs min·med·max\n';
+    for(const c of d.canali){
+      s+=c.nome.padEnd(12)+String(c.edges).padStart(6)+String(Math.round(c.freq_hz)).padStart(7)
+        +'   '+tri(c.alto).padEnd(21)+'  '+tri(c.basso)+'\n';
+    }
+    el.textContent=s;
+  }catch(e){ el.textContent='errore: '+e; }
+}
+
+// ═══════════════ SLIDERS ═══════════════
+let dragging=false;
+function bindSliders(){
+  const z=document.getElementById('zoomSl'), t=document.getElementById('timeSl');
+  z.oninput=()=>{zoomSamples=zoomFromSlider(+z.value);dirty=true;updLabels()};
+  t.oninput=()=>{const f=+t.value/1000;live=f>=0.999;
+    timePos=Math.round(base+(f)*(head-base));dirty=true;updLabels()};
+  t.onpointerdown=()=>dragging=true;
+  t.onpointerup=()=>dragging=false;
+}
+function updLabels(){
+  document.getElementById('zoomLbl').textContent=samplesLabel(zoomSamples);
+  const tl=document.getElementById('timeLbl');
+  if(live){tl.textContent='LIVE';tl.style.color='#22cc44'}
+  else{
+    const sec=(head-Math.min(timePos,head))/Math.max(rate*1000,1);
+    const label=trig.fired&&head-trig.idx<zoomSamples/2?'POST-TRIG…':'T−'+(sec>=1?sec.toFixed(1)+'s':(sec*1000).toFixed(0)+'ms');
+    tl.textContent=label;
+    tl.style.color='#ffd700';
+  }
+}
+setInterval(()=>{ // sync slider durante il live (se non trascinato)
+  if(evtMode){return}   // in EVT il footer è governato da evtDraw(): senza questa
+                        // guardia lo sovrascriveva coi numeri del ring RAW, che
+                        // in EVT restano fermi a zero ("buffer 0k")
+  if(!dragging&&live){
+    const t=document.getElementById('timeSl'); t.value=1000; updLabels();
+    document.getElementById('sbuf').textContent=((head-base)/1000|0)+'k';
+  }
+},200);
+
+// ═══════════════ RENDER ═══════════════
+function loop(){ if(dirty){draw();dirty=false} if(evtDirty){evtDraw();evtDirty=false} if(!live)updLabels(); requestAnimationFrame(loop) }
+
+function draw(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  if(W<20||H<20) return;
+  const laneH=H/C, cols=Math.max(50,Math.min(1400,Math.floor(W)));
+
+  const end=live?head:(trig.fired&&head-trig.idx<zoomSamples/2?head:Math.min(timePos,head));
+  // post-trigger filling: dopo il trigger la vista scorre finché la metà destra non è piena, poi congela
+  let start=end-zoomSamples;
+  if(start<base){start=base}
+  const len=end-start;
+  if(len<2){
+    ctx.fillStyle='#667';ctx.font='12px Consolas';ctx.textAlign='center';ctx.textBaseline='middle';
+    if(evtMode){ ctx.fillText('modalità EVT attiva — le transizioni sono nel pannello TRANSIZIONI EVT →',W/2,H/2); return; }
+    ctx.fillText(connected?'in attesa di dati…':'premi ▶ AVVIA — stream COM11 @ 2M',W/2,H/2);
+    return;
+  }
+  const s0=start-base;
+  const step=len/cols;
+
+  // decimazione UNICA per tutti i canali: OR/AND per colonna
+  const colO=new Int16Array(cols), colA=new Int16Array(cols);
+  for(let c=0;c<cols;c++){
+    const i0=s0+Math.floor(c*step), i1=Math.min(s0+len, s0+Math.floor((c+1)*step)+1);
+    let o=0,a=0xFF;
+    for(let i=i0;i<i1;i++){const b=buf[i];o|=b;a&=b}
+    colO[c]=o; colA[c]=a;
+  }
+
+  for(let ch=0;ch<C;ch++){
+    const y0=ch*laneH, mid=y0+laneH/2, bh=laneH/2-3;
+    ctx.font='bold 10px Consolas,monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle=chOn[ch]?chColors[ch]:'#444a55';
+    ctx.fillText(chNames[ch],8,y0+13);
+    ctx.strokeStyle='#151530'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,y0+.5); ctx.lineTo(W,y0+.5); ctx.stroke();
+
+    if(!chOn[ch]){
+      ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(0,y0,W,laneH);
+      continue;
+    }
+    const bit=CH_BIT[ch];
+    if(viewMode==='line'){
+      // ─── vista LINEA (stile oscilloscopio reale) ───
+      ctx.strokeStyle=chColors[ch]; ctx.lineWidth=1.8; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.shadowColor=chColors[ch]; ctx.shadowBlur=5;
+      ctx.beginPath();
+      let pen=false, lastY=mid;
+      for(let c=0;c<cols;c++){
+        const hi=(colO[c]>>bit)&1, lo=(colA[c]>>bit)&1;
+        const x0=c*W/cols, x1=(c+1)*W/cols;
+        if(hi===lo){
+          const y=hi?mid-bh:mid;
+          if(!pen){ctx.moveTo(x0,y);pen=true}else ctx.lineTo(x0,y);
+          ctx.lineTo(x1,y); lastY=y;
+        }else{
+          const yH=mid-bh, yL=mid;
+          ctx.lineTo(x0, hi?yH:yL);
+          ctx.lineTo(x0, lo?yH:yL);   // verticale di transizione
+          ctx.lineTo(x1, lo?yH:yL); lastY=yL;
+          pen=true;
+        }
+      }
+      ctx.stroke(); ctx.shadowBlur=0;
+      continue;
+    }
+    // ─── vista BLOCCHI (piena) ───
+    ctx.fillStyle=chColors[ch];
+    let px=0;
+    for(let col=0;col<cols;col++){
+      const hi=(colO[col]>>bit)&1, lo=(colA[col]>>bit)&1;
+      const v=hi!==lo?2:hi;
+      const xw=(col+1)*W/cols;
+      if(v===1) ctx.fillRect(px,mid-bh,xw-px,bh);
+      else if(v===0) ctx.fillRect(px,mid,xw-px,bh);
+      else{
+        const ga=ctx.globalAlpha; ctx.globalAlpha=ga*0.35;
+        ctx.fillRect(px,mid-bh,xw-px,bh*2); ctx.globalAlpha=ga;
+        ctx.fillRect(px,mid-1,xw-px,2);
+      }
+      px=xw;
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // marker del trigger: linea verticale rossa sul fronte catturato
+  if(trig.fired&&trig.idx>=start&&trig.idx<end){
+    const tx=(trig.idx-start)/len*W;
+    ctx.strokeStyle='#ff4466'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(tx,0); ctx.lineTo(tx,H); ctx.stroke();
+    ctx.fillStyle='#ff4466'; ctx.font='bold 10px Consolas'; ctx.textAlign='left';
+    ctx.fillText('⧓',Math.min(tx+3,W-14),12);
+  }
+
+  if(mode==='spi') drawSPI(start,len);
+}
+
+// ═══════════════ DECODER SPI (client-side, linee configurabili) ═══════════════
+let spiCfg=JSON.parse(localStorage.getItem('ekSpiCfg'))||{clk:1,mosi:3,miso:2}; // CH indices
+function renderSpiCfg(){
+  const el=document.getElementById('spiCfg');
+  let h='';
+  for(const role of ['clk','mosi','miso']){
+    h+=`<div class="scfg"><lab>${role.toUpperCase()}</lab>`;
+    for(let i=0;i<C;i++){
+      const sel=spiCfg[role]===i;
+      h+=`<span class="sp${sel?' sel':''}" style="${sel?`background:${chColors[i]};border-color:${chColors[i]}`:''}" onclick="setSpiRole('${role}',${i})">${esc(chNames[i])}</span>`;
+    }
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+function setSpiRole(role,i){
+  spiCfg[role]=i;
+  localStorage.setItem('ekSpiCfg',JSON.stringify(spiCfg));
+  renderSpiCfg(); lastSpiT=0; dirty=true;
+}
+let spiRows=[], lastSpiT=0;
+function drawSPI(start,len){
+  const now=performance.now();
+  if(now-lastSpiT<120) return;          // decodifica max ~8Hz
+  lastSpiT=now;
+  if(len>200000){document.getElementById('spiTable').textContent='zooma sotto 200k per decodificare';return}
+  const bClk=CH_BIT[spiCfg.clk], bMo=CH_BIT[spiCfg.mosi], bMi=CH_BIT[spiCfg.miso];
+  const s0=start-base;
+  const rows=[]; let mosi=0,miso=0,bits=0,prevSck=0;
+  for(let i=0;i<len;i++){
+    const b=buf[s0+i];
+    const sck=(b>>bClk)&1;
+    if(sck&&!prevSck){
+      mosi=((mosi<<1)|((b>>bMo)&1))&0xFF;
+      miso=((miso<<1)|((b>>bMi)&1))&0xFF;
+      if(++bits===8){rows.push([mosi,miso]);mosi=0;miso=0;bits=0}
+    }
+    prevSck=sck;
+  }
+  spiRows=rows.slice(-60);
+  const el=document.getElementById('spiTable');
+  let h='';
+  for(const [m,s] of spiRows){
+    const ec=s===0x69?' echo':'';
+    h+=`<div class="spi-row${ec}"><span class="m">${m.toString(16).padStart(2,'0').toUpperCase()}</span><span class="s">${s.toString(16).padStart(2,'0').toUpperCase()}</span></div>`;
+  }
+  el.innerHTML=h||'— nessun clock nel window —';
+  document.getElementById('spiCount').textContent=`(${rows.length} byte)`;
+}
+
+// ═══════════════ STRIP CANALI ═══════════════
+function initStrip(){
+  const s=document.getElementById('strip'); s.innerHTML='';
+  for(let i=0;i<C;i++){
+    const p=document.createElement('div');
+    p.className='pill'; p.id='pill'+i;
+    p.onclick=e=>{if(e.target.classList.contains('nm'))return; e.shiftKey?soloCh(i):toggleCh(i)};
+    p.innerHTML=`<span class="dot" style="background:${chColors[i]}"></span>
+      <span class="nm" style="color:${chColors[i]}" id="nm${i}" ondblclick="renameCh(${i},event)" title="click = on/off · doppio click = rinomina">${esc(chNames[i])}</span>`;
+    s.appendChild(p);
+  }
+  refreshStrip();
+}
+function refreshStrip(){for(let i=0;i<C;i++)document.getElementById('pill'+i).classList.toggle('off',!chOn[i])}
+function toggleCh(i){chOn[i]^=1;refreshStrip();dirty=true}
+function soloCh(i){ // shift+click = isola questo segnale, tutti gli altri off
+  chOn=chOn.map((_,k)=>k===i?1:0); refreshStrip(); dirty=true;
+  const s=document.createElement('div'); s.style.cssText='position:fixed;bottom:34px;left:12px;font-size:10px;color:#88ddff;background:#11112288;padding:2px 8px;border-radius:4px';
+  s.textContent='SOLO '+chNames[i]+' — click normale per riaccendere';
+  document.body.appendChild(s); setTimeout(()=>s.remove(),1600);
+}
+function renameCh(i,ev){
+  ev.stopPropagation();
+  const el=document.getElementById('nm'+i), old=chNames[i];
+  const inp=document.createElement('input');
+  inp.className='nm-input'; inp.value=old; inp.style.color=chColors[i];
+  const done=v=>{v=(v||'').trim()||old;chNames[i]=v;
+    localStorage.setItem('laChannelNames',JSON.stringify(chNames));
+    el.textContent=v;inp.remove();renderSpiCfg()};
+  inp.onkeydown=e=>{if(e.key==='Enter')done(inp.value);if(e.key==='Escape')done(old)};
+  inp.onblur=()=>done(inp.value);
+  el.replaceWith(inp); inp.focus(); inp.select();
+}
+function esc(s){return String(s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>')}
+
+// ═══════════════ PANNELLI (divider drag) ═══════════════
+function divStart(e){
+  e.preventDefault();
+  const side=document.getElementById('side');
+  const sw=side.clientWidth, sx=e.clientX;
+  document.onmousemove=ev=>{
+    let w=sw+(sx-ev.clientX);
+    w=Math.max(160,Math.min(window.innerWidth*0.5,w));
+    side.style.width=w+'px';
+  };
+  document.onmouseup=()=>{document.onmousemove=null;document.onmouseup=null};
+}
+function toggleSide(){
+  const s=document.getElementById('side');
+  s.classList.toggle('hidden');
+  localStorage.setItem('ekSideHidden',s.classList.contains('hidden')?'1':'0');
+}
+
+// ═══════════════ COMANDI ═══════════════
+function setMode(m){
+  mode=m;
+  document.getElementById('m-raw').classList.toggle('sel',m==='raw');
+  document.getElementById('m-spi').classList.toggle('sel',m==='spi');
+  dirty=true;
+}
+function setView(v){
+  viewMode=v;
+  localStorage.setItem('ekView',v);
+  document.getElementById('v-block').classList.toggle('sel',v==='block');
+  document.getElementById('v-line').classList.toggle('sel',v==='line');
+  dirty=true;
+}
+function avvia(){fetch('/api/start').then(r=>r.json()).then(r=>{if(!r.ok)alert(r.error)})}
+function ferma(){fetch('/api/stop').then(r=>r.json())}
+function pulisci(){fetch('/api/clear').then(r=>r.json());trigReset(false)}
+
+// ── indicatore IDLE/ATTIVO: la truth-telling della UI ──
+let lastEdgeTs=0, wasIdle=false;
+function updIdle(totalEdges){
+  const now=performance.now();
+  if(totalEdges>0) lastEdgeTs=now;
+  const idle=(now-lastEdgeTs)>2000;
+  const el=document.getElementById('idle');
+  if(idle){
+    el.textContent='○ IDLE — nessuna transizione';
+    el.style.color='#667'; el.style.borderColor='#2a2a4a';
+    if(!wasIdle){ // appena idle: pulisci anche il decoder (le pill erano del passato)
+      spiRows=[]; lastSpiT=0;
+      const st=document.getElementById('spiTable');
+      if(st) st.innerHTML='— idle: nessuna transizione reale —';
+      const sc=document.getElementById('spiCount'); if(sc) sc.textContent='';
+    }
+  }else{
+    el.textContent='● ATTIVO'; el.style.color='#22cc44'; el.style.borderColor='#2a5a2a';
+  }
+  wasIdle=idle;
+}
+function toggleConfig(){
+  const p=document.getElementById('config-panel'),o=document.getElementById('overlay');
+  const show=p.style.display!=='block';
+  p.style.display=show?'block':'none'; o.style.display=show?'block':'none';
+  if(show) fetch('/api/status').then(r=>r.json()).then(s=>{
+    document.getElementById('ib').value=s.baud;
+    document.getElementById('it').value=s.timer;
+    document.getElementById('ir').value=s.resolution;
+  });
+}
+function applyConfig(){
+  const b=document.getElementById('ib').value,
+        t=document.getElementById('it').value,
+        r=document.getElementById('ir').value;
+  let m=0; for(let i=0;i<C;i++) if(chOn[i]) m|=1<<i;
+  fetch(`/api/config/B${b}/T${t}/M${m.toString(2).padStart(6,'0')}/R${r}`)
+    .then(()=>toggleConfig());
+}
+
+</script>
+</body>
+</html>
