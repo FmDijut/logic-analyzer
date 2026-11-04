@@ -198,6 +198,7 @@ backend/demo_server.py         Synthetic signal generator (no hardware)
 backend/static/index.html      Web UI (vanilla JS, canvas)
 docs/engineering-notes.md      How the instrument was measured and improved
 docs/screenshot-evt.png        Transition view screenshot
+CHANGELOG.md                   Version history (what was wrong and how it was fixed)
 ```
 
 ---
