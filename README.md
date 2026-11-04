@@ -148,9 +148,15 @@ Delta is in 0.5 µs ticks. A delta of zero means two edges in the same tick.
 
 **1. Flash the firmware**
 
-Open `firmware/logic-analyzer.ino` in the Arduino IDE and upload it to an
-Uno/Nano. (Or with `arduino-cli`:
-`arduino-cli compile --fqbn arduino:avr:uno firmware && arduino-cli upload -p COM3 --fqbn arduino:avr:uno firmware`)
+Open `firmware/logic-analyzer/` in the Arduino IDE and upload it to an
+Uno/Nano. Or with `arduino-cli`:
+
+```bash
+arduino-cli compile --fqbn arduino:avr:uno firmware/logic-analyzer
+arduino-cli upload -p COM3 --fqbn arduino:avr:uno firmware/logic-analyzer
+```
+
+Uses 36% of flash and 60% of SRAM on an ATmega328P.
 
 **2. Start the backend**
 
@@ -186,7 +192,7 @@ set LA_PORT=COM4 && python server.py # Windows
 ## Repository layout
 
 ```
-firmware/logic-analyzer.ino    Arduino firmware (C++ / AVR)
+firmware/logic-analyzer/       Arduino sketch (C++ / AVR)
 backend/server.py              Flask backend: serial → ring buffer → SSE
 backend/demo_server.py         Synthetic signal generator (no hardware)
 backend/static/index.html      Web UI (vanilla JS, canvas)
